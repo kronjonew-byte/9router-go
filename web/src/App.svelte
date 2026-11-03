@@ -28,6 +28,7 @@
   import MediaWebView from './components/media/MediaWebView.svelte'
   import QuotaTrackerView from './components/QuotaTrackerView.svelte'
   import SkillsView from './components/SkillsView.svelte'
+  import PluginsView from './components/PluginsView.svelte'
   import SettingsView from './components/SettingsView.svelte'
   import SecurityPanel from './components/security/SecurityPanel.svelte'
   import PlansView from './components/plans/PlansView.svelte'
@@ -372,6 +373,7 @@
     'media-web': { title: 'Web Fetch & Search', description: 'Configure web search and scrape tools' },
     'proxy-pools': { title: 'Proxy Pools', description: 'Manage your proxy pool configurations' },
     skills: { title: 'Agent Skills', description: 'Copy a link and paste to your AI to use 9router-go — no install needed' },
+    plugins: { title: 'Plugins', description: 'Extend 9router-go capabilities with plugins and extensions' },
     'console-log': { title: 'Console Log', description: 'Live server console output' },
     terminal: { title: 'Console Log', description: 'Live server console output' },
     settings: { title: 'Settings', description: 'Manage your preferences and configuration' },
@@ -741,6 +743,8 @@
               <ProxyPoolsView />
             {:else if activeTab === 'skills'}
               <SkillsView />
+            {:else if activeTab === 'plugins'}
+              <PluginsView />
             {:else if activeTab === 'console-log' || activeTab === 'terminal'}
               <TerminalView />
             {:else if activeTab === 'settings'}

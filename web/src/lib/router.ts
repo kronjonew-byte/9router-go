@@ -21,6 +21,7 @@ export type ActiveTab =
   | 'media-web'
   | 'proxy-pools'
   | 'skills'
+  | 'plugins'
   | 'console-log'
   | 'terminal'
   | 'settings'
@@ -49,6 +50,7 @@ export const TAB_ROUTES: Record<ActiveTab, string> = {
   'media-web': '/dashboard/media-providers/web',
   'proxy-pools': '/dashboard/proxy-pools',
   skills: '/dashboard/skills',
+  plugins: '/dashboard/plugins',
   'console-log': '/dashboard/console-log',
   terminal: '/dashboard/console-log',
   settings: '/dashboard/profile',
@@ -151,6 +153,10 @@ const ROUTE_TO_TAB: Record<string, ActiveTab> = {
   // skills
   '/dashboard/skills': 'skills',
   '/skills': 'skills',
+
+  // plugins
+  '/dashboard/plugins': 'plugins',
+  '/plugins': 'plugins',
 
   // console-log / terminal
   '/dashboard/console-log': 'console-log',

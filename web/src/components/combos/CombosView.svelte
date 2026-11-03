@@ -47,7 +47,7 @@
   // (notably search-combo) live under media-providers/web, not here. The
   // auto-generated kinds are llm combos too and stay visible here.
   function isLlmCombo(c: Combo): boolean {
-    if (c.kind && c.kind !== 'llm' && !c.kind.startsWith('auto-')) return false
+    if (c.kind && c.kind !== 'llm' && c.kind !== 'chat' && c.kind !== 'vision' && c.kind !== 'audio' && !c.kind.startsWith('auto-')) return false
     if (c.name === 'search-combo' || c.name.startsWith('search-combo-')) return false
     return true
   }

@@ -1343,9 +1343,10 @@ var KnownProviders = map[string]ProviderConfig{
 		Hidden:     true,
 	},
 	"devin-cli": {
-		BaseURL:    "devin://acp/stdio",
+		BaseURL:    "https://api.openai.com/v1/chat/completions",
 		AuthHeader: "Authorization",
 		AuthScheme: "bearer",
+		NoAuth:     true,
 	},
 	"kilo-gateway": {
 		BaseURL:    "https://api.kilo.ai/api/gateway/chat/completions",

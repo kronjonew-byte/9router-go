@@ -112,6 +112,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       { kind: 'link', id: 'proxy-pools', label: 'Proxy Pools', icon: 'lan' },
       { kind: 'link', id: 'skills', label: 'Skills', icon: 'extension' },
+      { kind: 'link', id: 'plugins', label: 'Plugins', icon: 'widgets' },
       // Console Log and Settings sit last on purpose: they are the two entries
       // an operator reaches for after everything else, and Settings is the one
       // entry that must never disappear — so it is the final row, out of the
