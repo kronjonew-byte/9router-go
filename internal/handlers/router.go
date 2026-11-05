@@ -271,6 +271,14 @@ func SetupDashboardRoutes(r chi.Router, repo *db.Repo, chatH *chat.ChatHandler) 
 	r.Put("/api/jailbreak/presets/order", dashH.HandleReorderJailbreakPresets)
 	r.Post("/api/jailbreak/presets/upload", dashH.HandleUploadJailbreakPreset)
 
+	// Custom plugins: X-Router-style request transformers (vision passthrough,
+	// thinking depth, JSON guard, context squeezer, tool bridge, anti-slop).
+	// Registered here and in dashboard.RegisterRoutes (a tests-only table); a
+	// route added there alone 404s on the real server — the same trap as the
+	// jailbreak and per-node limits pairs.
+	r.Get("/api/custom-plugins", dashH.HandleGetCustomPlugins)
+	r.Put("/api/custom-plugins", dashH.HandlePutCustomPlugins)
+
 	r.Get("/api/provider-nodes", dashH.HandleGetProviderNodes)
 	r.Post("/api/provider-nodes", dashH.HandleCreateProviderNode)
 	r.Put("/api/provider-nodes/{id}", dashH.HandleUpdateProviderNode)

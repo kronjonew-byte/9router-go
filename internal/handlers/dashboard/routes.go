@@ -178,6 +178,11 @@ func RegisterRoutes(r chi.Router, h *DashboardHandler) {
 		r.Delete("/guardrails/policies/{id}", h.HandleDeleteGuardrailPolicy)
 		r.Get("/guardrails/logs", h.HandleListGuardrailLogs)
 
+		// Custom plugins: X-Router-style request transformers (vision passthrough,
+		// thinking depth, JSON guard, context squeezer, tool bridge, anti-slop).
+		r.Get("/custom-plugins", h.HandleGetCustomPlugins)
+		r.Put("/custom-plugins", h.HandlePutCustomPlugins)
+
 		// Jailbreak: agent prompt presets library; per-model preset binding.
 		r.Get("/jailbreak", h.HandleGetJailbreak)
 		r.Put("/jailbreak", h.HandlePutJailbreak)

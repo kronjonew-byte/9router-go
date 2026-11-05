@@ -204,6 +204,36 @@ func (r *Repo) SetGuardrailsEnabled(enabled bool) error {
 	return r.UpdateSettingsRaw(map[string]any{"guardrailsEnabled": enabled})
 }
 
+// customPluginsSettingsKey is the settings blob key holding the custom-plugins
+// configuration map (id -> PluginConfig).
+const customPluginsSettingsKey = "customPlugins"
+
+// GetCustomPlugins returns the persisted custom-plugins config as a map of
+// plugin id -> config object, or nil when nothing has been configured.
+func (r *Repo) GetCustomPlugins() map[string]any {
+	raw, err := r.GetSettingsRaw()
+	if err != nil || raw == nil {
+		return nil
+	}
+	v, ok := raw[customPluginsSettingsKey]
+	if !ok {
+		return nil
+	}
+	if m, ok := v.(map[string]any); ok {
+		return m
+	}
+	return nil
+}
+
+// SetCustomPlugins persists the custom-plugins config map under the settings
+// blob. A nil map clears the setting entirely.
+func (r *Repo) SetCustomPlugins(cfg map[string]any) error {
+	if cfg == nil {
+		return r.UpdateSettingsRaw(map[string]any{customPluginsSettingsKey: nil})
+	}
+	return r.UpdateSettingsRaw(map[string]any{customPluginsSettingsKey: cfg})
+}
+
 // RateLimitDefaults is the operator's fallback for keys that set no limit of
 // their own.
 //

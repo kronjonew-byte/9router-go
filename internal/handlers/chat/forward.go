@@ -64,6 +64,10 @@ func (h *ChatHandler) forwardRequest(
 			body = sanitized
 		}
 	}
+	// Custom plugins (X-Router-style request transformers). Applied on every
+	// OpenAI-compatible forward lane after provider-level repair, keyed on the
+	// resolved provider and the model as asked by the client.
+	body = h.applyCustomPlugins(body, provider)
 	// OpenRouter strict pattern validation (PR #3665): strip malformed regex patterns
 	if strings.Contains(cfg.BaseURL, "openrouter.ai") {
 		var bodyMap map[string]any

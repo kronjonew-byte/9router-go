@@ -1,3 +1,10 @@
+export interface CustomPluginConfig {
+  enabled: boolean
+  models?: string[]
+  level?: 'lite' | 'full'
+}
+export type CustomPluginConfigMap = Record<string, CustomPluginConfig>
+
 export interface DatabaseStats {
   databaseSizeBytes: number
   reclaimableBytes: number
@@ -2637,5 +2644,16 @@ export const api = {
     }>(`/api/combos/${encodeURIComponent(id)}/test-models`, {
       method: 'POST',
       body: JSON.stringify(opts || {}),
+    }),
+
+  // Custom plugins (X-Router-style request transformers).
+  getCustomPlugins: async () => {
+    const res = await request<{ customPlugins: CustomPluginConfigMap }>('/api/custom-plugins')
+    return res?.customPlugins || {}
+  },
+  putCustomPlugins: (cfg: CustomPluginConfigMap) =>
+    request<{ customPlugins: CustomPluginConfigMap }>('/api/custom-plugins', {
+      method: 'PUT',
+      body: JSON.stringify(cfg),
     }),
 }
