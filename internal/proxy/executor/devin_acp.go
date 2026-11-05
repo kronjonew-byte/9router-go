@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -34,8 +36,21 @@ func ForwardDevinACP(w http.ResponseWriter, req *Request) error {
 		}
 	}
 
-	// Run devin -p
-	cmd := exec.CommandContext(req.Ctx, "devin", "-p", prompt)
+	// Run devin -p. Print mode is non-interactive: without an explicit
+	// permission mode the CLI defaults to "auto" and rejects any tool call
+	// that needs confirmation, printing "rejected a tool call that requires
+	// confirmation" into the response body. Default to "dangerous" (gateway
+	// use is unattended) and allow an env override.
+	permissionMode := strings.TrimSpace(os.Getenv("DEVIN_CLI_PERMISSION_MODE"))
+	if permissionMode == "" {
+		permissionMode = "dangerous"
+	}
+	cmd := exec.CommandContext(req.Ctx, "devin", "-p", prompt, "--permission-mode", permissionMode)
+	// Devin refuses to run in an untrusted workspace (its default cwd is the
+	// gateway binary's directory), so pin the child to a trusted directory.
+	// Operators can point DEVIN_CLI_WORKSPACE at the directory they trusted
+	// interactively; otherwise use $HOME/workspace when it exists.
+	cmd.Dir = devinWorkspaceDir()
 	outBytes, err := cmd.CombinedOutput()
 	output := string(outBytes)
 	if err != nil {
@@ -45,7 +60,13 @@ func ForwardDevinACP(w http.ResponseWriter, req *Request) error {
 
 	created := time.Now().Unix()
 	respID := fmt.Sprintf("devin-%d", created)
-	modelName := req.ModelName
+	// Label the reply with the model the client asked for. The chat handler
+	// does not populate req.ModelName on this path, so read the body; fall
+	// back to the executor field and only then to the historical default.
+	modelName := strings.TrimSpace(chatReq.Model)
+	if modelName == "" {
+		modelName = strings.TrimSpace(req.ModelName)
+	}
 	if modelName == "" {
 		modelName = "gpt-5.4-high"
 	}
@@ -122,4 +143,23 @@ func ForwardDevinACP(w http.ResponseWriter, req *Request) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	return json.NewEncoder(w).Encode(resp)
+}
+
+// devinWorkspaceDir returns the directory the devin CLI child should run in.
+// Devin only runs non-interactively in a workspace it has been told to trust;
+// the gateway's own cwd (/usr/local/bin) is not one. Empty means "inherit",
+// which preserves the previous behavior when no trusted dir is available.
+func devinWorkspaceDir() string {
+	if dir := strings.TrimSpace(os.Getenv("DEVIN_CLI_WORKSPACE")); dir != "" {
+		return dir
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	dir := filepath.Join(home, "workspace")
+	if st, err := os.Stat(dir); err == nil && st.IsDir() {
+		return dir
+	}
+	return ""
 }

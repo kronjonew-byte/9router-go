@@ -110,17 +110,22 @@ var freeModelCatalog = []freeBudget{
 	// Note the suffix is "-free", NOT OpenRouter's ":free", so the payload
 	// signal never fires and this catalogue entry is the only thing that can
 	// badge these models.
+	// Re-verified 2026-11-05 against https://opencode.ai/zen/v1/models and by
+	// calling every id through the gateway: all nine answer 200 with content.
+	// Dropped because the chat endpoint now returns 400 "Model is unavailable":
+	// mimo-v2.5-free, ling-3.0-flash-fin-free, nemotron-3-ultra-free,
+	// space-bunny-free, muse-spark-1.3-contributor-free,
+	// muse-spark-1.2-contributor-free. crouton-alpha-free is free (price 0) but
+	// still returns an empty message, so it stays out until it produces text.
 	{"opencode", "big-pickle", regimeKeyless, ""},
-	{"opencode", "mimo-v2.5-free", regimeKeyless, ""},
+	{"opencode", "beam-free", regimeKeyless, ""},
+	{"opencode", "flint-40b-free", regimeKeyless, ""},
 	{"opencode", "mimo-v2.6-flash-free", regimeKeyless, ""},
-	{"opencode", "ling-3.0-flash-fin-free", regimeKeyless, ""},
-	{"opencode", "nemotron-3-ultra-free", regimeKeyless, ""},
+	{"opencode", "nemotron-3.5-super-vl-free", regimeKeyless, ""},
 	{"opencode", "nemotron-3.5-lightning-free", regimeKeyless, ""},
-	{"opencode", "space-bunny-free", regimeKeyless, ""},
-	// muse-spark rejects max_output_tokens < 16 with a 400; the model itself is
-	// fine with a sane value. See minOutputTokensForProvider.
-	{"opencode", "muse-spark-1.3-contributor-free", regimeKeyless, ""},
-	{"opencode", "muse-spark-1.2-contributor-free", regimeKeyless, ""},
+	{"opencode", "deepseek-v4.1-flash-free", regimeKeyless, ""},
+	{"opencode", "glm-5.3-flash-free", regimeKeyless, ""},
+	{"opencode", "pulse-alpha-free", regimeKeyless, ""},
 
 	// Google AI Studio (api-key free tier).
 	{"gemini", "gemini-2.5-flash", regimeRecurringDaily, ""},
