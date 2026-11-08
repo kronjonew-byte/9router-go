@@ -90,6 +90,18 @@
     onConfirm: () => Promise<void> | void
   } | null>(null)
   let relayMenuRef = $state<HTMLDivElement | null>(null)
+  let harvesting = $state(false)
+  let harvestTarget = $state(5)
+  let harvestLoopMinutes = $state(15)
+  let harvestStatus = $state<{
+    running?: boolean
+    lastMessage?: string
+    targetCount?: number
+    loopIntervalMinutes?: number
+    lastRunAt?: string
+    lastAdded?: number
+    lastTested?: number
+  } | null>(null)
 
   // Tested pools float to the top (most recently tested first);
   // never-tested pools keep backend order below.
@@ -113,8 +125,89 @@
     }
   }
 
+  async function fetchHarvestStatus() {
+    try {
+      const res = await fetch('/api/proxy-pools/harvest', {
+        headers: getAuthHeaders()
+      })
+      if (res.ok) {
+        const data = await res.json()
+        harvestStatus = data
+        harvesting = data.running === true
+        if (typeof data.targetCount === 'number' && data.targetCount > 0) {
+          harvestTarget = data.targetCount
+        }
+        if (typeof data.loopIntervalMinutes === 'number') {
+          harvestLoopMinutes = data.loopIntervalMinutes
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  async function handleToggleHarvest() {
+    try {
+      importing = true
+      if (harvesting) {
+        const res = await fetch('/api/proxy-pools/harvest', {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ action: 'stop' })
+        })
+        const data = await res.json()
+        if (data.success) {
+          notifications.success(data.message || 'Harvester stopped')
+          harvesting = false
+          await fetchHarvestStatus()
+        } else {
+          notifications.error(data.error || 'Failed to stop harvester')
+        }
+      } else {
+        const res = await fetch('/api/proxy-pools/harvest', {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            action: 'start',
+            target: Number(harvestTarget) || 5,
+            loopMinutes: Number(harvestLoopMinutes) || 0
+          })
+        })
+        const data = await res.json()
+        if (data.success) {
+          notifications.success(data.message || 'Harvester started')
+          harvesting = true
+          await fetchHarvestStatus()
+          await fetchProxyPools()
+        } else {
+          notifications.error(data.error || 'Failed to start harvester')
+        }
+      }
+    } catch (e: any) {
+      notifications.error(e?.message || 'Failed to toggle harvester')
+    } finally {
+      importing = false
+    }
+  }
+
   onMount(() => {
     fetchProxyPools()
+    fetchHarvestStatus()
+    const timer = setInterval(() => {
+      fetchHarvestStatus()
+      if (harvesting) {
+        fetchProxyPools()
+      }
+    }, 8000)
+    return () => {
+      clearInterval(timer)
+    }
   })
 
   // Close the Deploy Relay menu on outside click (upstream parity).
@@ -859,11 +952,111 @@
 
           <MenuItem label="Add Proxy Pool" icon="add" onSelect={() => openCreateModal('single')} />
           <MenuItem label="Batch Import" icon="upload" onSelect={() => openCreateModal('bulk')} />
+          <div class="my-1 border-t border-border-subtle" role="separator"></div>
+          <MenuItem
+            label={harvesting ? 'Stop Harvester' : 'Harvest Live Proxies'}
+            icon={harvesting ? 'stop_circle' : 'wifi_find'}
+            onSelect={handleToggleHarvest}
+          />
+          <MenuItem label="Prune Dead Pools" icon="cleaning_services" onSelect={() => {
+            confirmState = {
+              title: 'Prune Dead Proxy Pools',
+              message: 'Remove all inactive or failing proxy pools?',
+              confirmText: 'Prune',
+              onConfirm: async () => {
+                try {
+                  const res = await fetch('/api/proxy-pools/prune-dead', {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                  });
+                  const data = await res.json();
+                  if (data.success) {
+                    notifications.success(data.message);
+                    await fetchProxyPools();
+                  } else {
+                    notifications.error(data.error || 'Failed to prune dead proxies');
+                  }
+                } catch (e: any) {
+                  notifications.error(e?.message || 'Failed to prune dead proxies');
+                } finally {
+                  confirmState = null;
+                }
+              }
+            };
+          }} />
         </Menu>
       </div>
     </div>
 
     <Card>
+      <!-- Auto-Harvester Engine Row (Pindah ke atas baris tabel) -->
+      <div class="mb-4 flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-2/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
+            <span class="material-symbols-outlined text-[19px]">sensors</span>
+          </div>
+          <div class="min-w-0 flex flex-col">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold text-text-main tracking-tight">Auto-Harvester Engine</span>
+              <span class={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-mono font-medium ${harvesting ? 'bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 border border-emerald-500/30' : 'bg-surface-3 text-text-muted'}`}>
+                <span class={`size-1.5 rounded-full shrink-0 ${harvesting ? 'bg-emerald-500 animate-pulse' : 'bg-text-subtle'}`}></span>
+                {harvesting ? 'ACTIVE' : 'IDLE'}
+              </span>
+            </div>
+            <span class="text-[11px] text-text-muted truncate">
+              {harvestStatus?.lastMessage || 'Scrapes fast pre-verified HTTP/HTTPS proxies from upstream feeds'}
+            </span>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 shrink-0 pt-2 sm:pt-0 border-t border-border-subtle/50 sm:border-t-0">
+          <div class="flex items-center gap-1.5 rounded-lg border border-border-subtle bg-surface px-2.5 py-1 text-xs">
+            <label for="harvest-target-input" class="text-text-muted font-mono text-xs whitespace-nowrap">Target:</label>
+            <input
+              id="harvest-target-input"
+              type="number"
+              min="1"
+              max="200"
+              bind:value={harvestTarget}
+              disabled={harvesting || importing}
+              class="w-14 rounded border border-border-subtle bg-surface-2 px-1.5 py-0.5 text-center font-mono text-xs text-text-main focus:border-primary focus:outline-none"
+              title="Target number of live proxies to collect"
+            />
+          </div>
+
+          <div class="flex items-center gap-1.5 rounded-lg border border-border-subtle bg-surface px-2.5 py-1 text-xs">
+            <label for="harvest-loop-select" class="text-text-muted font-mono text-xs whitespace-nowrap">Loop:</label>
+            <select
+              id="harvest-loop-select"
+              bind:value={harvestLoopMinutes}
+              disabled={harvesting || importing}
+              class="rounded border border-border-subtle bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-text-main focus:border-primary focus:outline-none cursor-pointer"
+              title="Background repeating harvest cycle"
+            >
+              <option value={0}>Off (Once)</option>
+              <option value={2}>Every 2m (Aggressive)</option>
+              <option value={5}>Every 5m (Fast)</option>
+              <option value={15}>Every 15m</option>
+              <option value={30}>Every 30m</option>
+              <option value={60}>Every 1h</option>
+            </select>
+          </div>
+
+          <Button
+            size="sm"
+            variant={harvesting ? 'danger' : 'primary'}
+            onclick={handleToggleHarvest}
+            disabled={importing}
+            title={harvesting ? 'Stop background harvester' : 'Start background harvest'}
+          >
+            <span class="material-symbols-outlined text-[16px]">
+              {harvesting ? 'stop_circle' : 'play_arrow'}
+            </span>
+            {harvesting ? 'Stop' : 'Harvest'}
+          </Button>
+        </div>
+      </div>
+
       <!-- Filter & Sort Controls & Quick Cleanup -->
       <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div class="flex items-center gap-1.5">

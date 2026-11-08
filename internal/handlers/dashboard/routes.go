@@ -144,6 +144,10 @@ func RegisterRoutes(r chi.Router, h *DashboardHandler) {
 		// Proxy Pools
 		r.Get("/proxy-pools", h.HandleGetProxyPools)
 		r.Post("/proxy-pools", h.HandleCreateProxyPool)
+		r.Get("/proxy-pools/harvest", h.HandleHarvestProxyPools)
+		r.Post("/proxy-pools/harvest", h.HandleHarvestProxyPools)
+		r.Delete("/proxy-pools/prune-dead", h.HandlePruneDeadProxyPools)
+	r.Delete("/proxy-pools/prune-old", h.HandlePruneOldProxyPools)
 		r.Put("/proxy-pools/{id}", h.HandleUpdateProxyPool)
 		r.Delete("/proxy-pools/{id}", h.HandleDeleteProxyPool)
 		r.Post("/proxy-pools/{id}/test", h.HandleTestProxyPool)

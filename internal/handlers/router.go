@@ -319,6 +319,12 @@ func SetupDashboardRoutes(r chi.Router, repo *db.Repo, chatH *chat.ChatHandler) 
 
 	r.Get("/api/proxy-pools", dashH.HandleGetProxyPools)
 	r.Post("/api/proxy-pools", dashH.HandleCreateProxyPool)
+	// Static segments — chi prefers them over {id}, so these cannot be
+	// shadowed by the parameterised routes below. Registered here as well as
+	// in dashboard.RegisterRoutes because that table is mounted by tests only.
+	r.Get("/api/proxy-pools/harvest", dashH.HandleHarvestProxyPools)
+	r.Post("/api/proxy-pools/harvest", dashH.HandleHarvestProxyPools)
+	r.Delete("/api/proxy-pools/prune-dead", dashH.HandlePruneDeadProxyPools)
 	r.Put("/api/proxy-pools/{id}", dashH.HandleUpdateProxyPool)
 	r.Delete("/api/proxy-pools/{id}", dashH.HandleDeleteProxyPool)
 	r.Post("/api/proxy-pools/{id}/test", dashH.HandleTestProxyPool)
