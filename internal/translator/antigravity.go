@@ -906,7 +906,7 @@ func ParseImageConfig(model string) (cleanModel, aspectRatio string) {
 	cleanModel = model
 
 	// Look for suffix like -16x9, -4x3, -1x1, -1024x768
-	if before, suffix, ok := strings.CutLast(model, "-"); ok && suffix != "" {
+	if before, suffix, ok := cutLast(model, "-"); ok && suffix != "" {
 		if xIdx := strings.Index(suffix, "x"); xIdx != -1 {
 			var w, h int
 			if _, err := fmt.Sscanf(suffix, "%dx%d", &w, &h); err == nil && w > 0 && h > 0 {
@@ -1079,4 +1079,12 @@ func DecloakStreamChunk(chunkBytes []byte, toolNameMap map[string]string) []byte
 func DecloakClaudeStreamEvent(event map[string]any, toolNameMap map[string]string) map[string]any {
 	out, _ := decloakContentBlockStart(event, toolNameMap)
 	return out
+}
+
+func cutLast(s, sep string) (string, string, bool) {
+	i := strings.LastIndex(s, sep)
+	if i < 0 {
+		return s, "", false
+	}
+	return s[:i], s[i+len(sep):], true
 }

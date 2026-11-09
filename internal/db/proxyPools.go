@@ -407,16 +407,5 @@ func (r *Repo) SetProxyPoolStatus(id string, status string, latencyMs int64) err
 	return err
 }
 
-// UpdateProxyPoolsStatusOlderThan updates status for proxy pools where last_verified < cutoff.
-// Returns number of affected rows.
-func (r *Repo) UpdateProxyPoolsStatusOlderThan(cutoff time.Time, status string) (int64, error) {
-	result, err := r.db.Exec(`
-		UPDATE proxyPools
-		SET testStatus = ?, isActive = 0, updatedAt = ?
-		WHERE last_verified < ?
-	`, status, time.Now().UTC().Format(time.RFC3339), cutoff.UTC())
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
+// UpdateProxyPoolsStatusOlderThan was removed together with the manual
+// prune-old handler; auto-prune runs through the auto-scan engine.

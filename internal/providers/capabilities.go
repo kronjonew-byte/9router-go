@@ -47,7 +47,7 @@ func SetCustomModelCaps(provider, model string, caps Capabilities) {
 	customCaps[key] = caps
 	// also store base model variant
 	base := model
-	if _, after, ok := strings.CutLast(model, "/"); ok {
+	if _, after, ok := cutLast(model, "/"); ok {
 		base = after
 	}
 	if base != model {
@@ -69,7 +69,7 @@ func staticCatalogOwnsModel(provider, model string) bool {
 	if len(ids) == 0 {
 		return false
 	}
-	if _, base, ok := strings.CutLast(model, "/"); ok {
+	if _, base, ok := cutLast(model, "/"); ok {
 		return slices.Contains(ids, model) || slices.Contains(ids, base)
 	}
 	return slices.Contains(ids, model)
@@ -85,7 +85,7 @@ func GetCustomModelCaps(provider, model string) (Capabilities, bool) {
 		return caps, true
 	}
 	// try base model
-	if _, after, ok := strings.CutLast(model, "/"); ok {
+	if _, after, ok := cutLast(model, "/"); ok {
 		base := after
 		customCapsMu.RLock()
 		caps, ok = customCaps[provider+"||"+base]
@@ -143,7 +143,7 @@ func IsJailbreakModel(model string) bool {
 	}
 	// The bare id is what a marker would be attached to: "vendor/model-jailbreak"
 	// carries it after the slash, and the vendor half is not part of the name.
-	if _, after, ok := strings.CutLast(clean, "/"); ok {
+	if _, after, ok := cutLast(clean, "/"); ok {
 		clean = after
 	}
 	lower := strings.ToLower(clean)
@@ -1004,7 +1004,7 @@ func lookupProviderTokenLimits(provider, model string) (contextWindow, maxOutput
 		return 0, 0
 	}
 	base := model
-	if _, after, found := strings.CutLast(model, "/"); found {
+	if _, after, found := cutLast(model, "/"); found {
 		base = after
 	}
 	if limits, found := byModel[base]; found {
@@ -1067,7 +1067,7 @@ func GetCapabilitiesForModel(provider, model string) Capabilities {
 	capsCacheMu.RUnlock()
 
 	baseModel := model
-	if _, after, ok := strings.CutLast(model, "/"); ok {
+	if _, after, ok := cutLast(model, "/"); ok {
 		baseModel = after
 	}
 
@@ -1361,7 +1361,7 @@ func GetCapabilitiesDetailForModel(provider, model string) CapabilitiesDetail {
 	}
 	if pCaps, ok := providerCapabilities[provider]; ok {
 		baseModel := model
-		if _, after, found := strings.CutLast(model, "/"); found {
+		if _, after, found := cutLast(model, "/"); found {
 			baseModel = after
 		}
 		if c, found := pCaps[model]; found {
@@ -1418,7 +1418,7 @@ func lookupCustomModelCaps(provider, model string) (Capabilities, bool) {
 	if caps, ok := GetCustomModelCaps(provider, model); ok {
 		return caps, true
 	}
-	if _, after, ok := strings.CutLast(model, "/"); ok {
+	if _, after, ok := cutLast(model, "/"); ok {
 		return GetCustomModelCaps(provider, after)
 	}
 	return Capabilities{}, false
@@ -1466,4 +1466,12 @@ func applyCustomCaps(dst *Capabilities, custom Capabilities) {
 	if custom.MaxOutput != 0 {
 		dst.MaxOutput = custom.MaxOutput
 	}
+}
+
+func cutLast(s, sep string) (string, string, bool) {
+	i := strings.LastIndex(s, sep)
+	if i < 0 {
+		return s, "", false
+	}
+	return s[:i], s[i+len(sep):], true
 }

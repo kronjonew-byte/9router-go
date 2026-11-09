@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -443,34 +442,220 @@ func (h *DashboardHandler) HandlePruneDeadProxyPools(w http.ResponseWriter, r *h
 	})
 }
 
-// HandlePruneOldProxyPools marks proxy pools as inactive if last_verified is older than threshold days.
-func (h *DashboardHandler) HandlePruneOldProxyPools(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
-		handlerutil.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+// HandlePruneOldProxyPools was removed: auto-prune is handled by the
+// auto-scan engine (HandleAutoScanProxyPools), which deletes dead unbound
+// pools. Manual "prune old" menu/API is no longer exposed.
+
+var autoScanState = struct {
+	sync.Mutex
+	running         bool
+	intervalMinutes int
+	timer           *time.Timer
+	inCycle         bool
+	lastRunAt       string
+	lastScanned     int
+	lastPruned      int
+	lastMessage     string
+}{
+	intervalMinutes: 30,
+	lastMessage:     "Idle",
+}
+
+func scheduleAutoScanner(h *DashboardHandler) {
+	autoScanState.Lock()
+	if autoScanState.timer != nil {
+		autoScanState.timer.Stop()
+		autoScanState.timer = nil
+	}
+	if autoScanState.running && autoScanState.intervalMinutes > 0 {
+		duration := time.Duration(autoScanState.intervalMinutes) * time.Minute
+		autoScanState.timer = time.AfterFunc(duration, func() {
+			autoScanState.Lock()
+			running := autoScanState.running
+			autoScanState.Unlock()
+			if running {
+				go executeAutoScanCycle(h)
+				scheduleAutoScanner(h)
+			}
+		})
+	}
+	autoScanState.Unlock()
+}
+
+func executeAutoScanCycle(h *DashboardHandler) {
+	autoScanState.Lock()
+	if autoScanState.inCycle {
+		autoScanState.Unlock()
 		return
 	}
+	autoScanState.inCycle = true
+	autoScanState.lastRunAt = time.Now().UTC().Format(time.RFC3339)
+	autoScanState.lastMessage = "Scanning proxy pools health..."
+	autoScanState.Unlock()
 
-	daysStr := r.URL.Query().Get("days")
-	if daysStr == "" {
-		daysStr = "7"
-	}
-	days, err := strconv.Atoi(daysStr)
-	if err != nil || days < 1 {
-		handlerutil.WriteJSONError(w, http.StatusBadRequest, "invalid days parameter")
-		return
-	}
+	defer func() {
+		autoScanState.Lock()
+		autoScanState.inCycle = false
+		autoScanState.Unlock()
+	}()
 
-	cutoff := time.Now().AddDate(0, 0, -days)
-
-	result, err := h.Repo.UpdateProxyPoolsStatusOlderThan(cutoff, "inactive")
+	pools, err := h.Repo.ListProxyPools()
 	if err != nil {
-		handlerutil.WriteJSONError(w, http.StatusInternalServerError, err.Error())
+		autoScanState.Lock()
+		autoScanState.lastMessage = "Scan error: " + err.Error()
+		autoScanState.Unlock()
 		return
 	}
 
-	handlerutil.WriteJSON(w, http.StatusOK, map[string]any{
-		"success":     true,
-		"affected":    result,
-		"message":     fmt.Sprintf("Pruned %d old proxy pool(s) (older than %d days)", result, days),
-	})
+	boundCounts := h.countProxyPoolBindings()
+
+	var mu sync.Mutex
+	deadCount := 0
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 15)
+
+	for _, p := range pools {
+		autoScanState.Lock()
+		running := autoScanState.running
+		autoScanState.Unlock()
+		if !running {
+			break
+		}
+
+		id, _ := p["id"].(string)
+		if id == "" {
+			continue
+		}
+		proxyURL, _ := p["proxyUrl"].(string)
+		if proxyURL == "" {
+			continue
+		}
+
+		isBound := boundCounts[id] > 0
+
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(poolID, pURL string, bound bool) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			parsedURL, err := url.Parse(pURL)
+			if err != nil {
+				if !bound {
+					if err := h.Repo.DeleteProxyPool(poolID); err == nil {
+						mu.Lock()
+						deadCount++
+						mu.Unlock()
+					}
+				}
+				return
+			}
+
+			client := &http.Client{
+				Timeout: probeTimeout,
+				Transport: &http.Transport{
+					Proxy: http.ProxyURL(parsedURL),
+				},
+			}
+
+			ok, latency, _, _ := probeViaProxyExtended(context.Background(), client)
+			if !ok {
+				if !bound {
+					if err := h.Repo.DeleteProxyPool(poolID); err == nil {
+						mu.Lock()
+						deadCount++
+						mu.Unlock()
+					}
+				} else {
+					_ = h.Repo.SetProxyPoolStatus(poolID, "error", 0)
+				}
+			} else {
+				_ = h.Repo.SetProxyPoolStatus(poolID, "ok", latency)
+			}
+		}(id, proxyURL, isBound)
+	}
+
+	wg.Wait()
+
+	autoScanState.Lock()
+	autoScanState.lastScanned = len(pools)
+	autoScanState.lastPruned = deadCount
+	autoScanState.lastMessage = fmt.Sprintf("Checked %d proxies, auto-deleted %d dead", len(pools), deadCount)
+	autoScanState.Unlock()
+}
+
+// HandleAutoScanProxyPools handles GET (status) and POST (start/stop/configure) for background auto-scan pruner.
+func (h *DashboardHandler) HandleAutoScanProxyPools(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		autoScanState.Lock()
+		defer autoScanState.Unlock()
+		handlerutil.WriteJSON(w, http.StatusOK, map[string]any{
+			"running":         autoScanState.running,
+			"intervalMinutes": autoScanState.intervalMinutes,
+			"lastRunAt":       autoScanState.lastRunAt,
+			"lastScanned":     autoScanState.lastScanned,
+			"lastPruned":      autoScanState.lastPruned,
+			"lastMessage":     autoScanState.lastMessage,
+		})
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		var m map[string]any
+		bodyBytes, _ := io.ReadAll(r.Body)
+		if len(bodyBytes) > 0 {
+			_ = json.Unmarshal(bodyBytes, &m)
+		}
+
+		action, _ := m["action"].(string)
+		if action == "stop" {
+			autoScanState.Lock()
+			autoScanState.running = false
+			if autoScanState.timer != nil {
+				autoScanState.timer.Stop()
+				autoScanState.timer = nil
+			}
+			autoScanState.lastMessage = "Auto-scanner paused."
+			autoScanState.Unlock()
+
+			handlerutil.WriteJSON(w, http.StatusOK, map[string]any{
+				"success": true,
+				"running": false,
+				"message": "Auto-scanner paused.",
+			})
+			return
+		}
+
+		interval := 30
+		if val, ok := m["interval"].(float64); ok && val > 0 {
+			interval = int(val)
+		} else if val, ok := m["intervalMinutes"].(float64); ok && val > 0 {
+			interval = int(val)
+		}
+		if interval < 1 {
+			interval = 1
+		}
+		if interval > 1440 {
+			interval = 1440
+		}
+
+		autoScanState.Lock()
+		autoScanState.intervalMinutes = interval
+		autoScanState.running = true
+		autoScanState.Unlock()
+
+		scheduleAutoScanner(h)
+		go executeAutoScanCycle(h)
+
+		handlerutil.WriteJSON(w, http.StatusOK, map[string]any{
+			"success":         true,
+			"running":         true,
+			"intervalMinutes": interval,
+			"message":         fmt.Sprintf("Auto-scan active: Checking every %dm and auto-deleting dead proxies.", interval),
+		})
+		return
+	}
+
+	handlerutil.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 }

@@ -63,14 +63,14 @@ func isCommandCodeTextOnly(model string) bool {
 		return true
 	}
 	base := key
-	if _, after, ok := strings.CutLast(key, "/"); ok {
+	if _, after, ok := cutLast(key, "/"); ok {
 		base = after
 	}
 	for id := range commandCodeTextOnly {
 		if !strings.Contains(id, "/") {
 			continue
 		}
-		if _, after, _ := strings.CutLast(id, "/"); after == base {
+		if _, after, _ := cutLast(id, "/"); after == base {
 			return true
 		}
 	}
@@ -90,3 +90,4 @@ func commandCodeCapabilities(model string) Capabilities {
 	res.MaxOutput = commandCodeMaxOutput
 	return res
 }
+

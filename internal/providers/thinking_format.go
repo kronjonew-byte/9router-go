@@ -1,7 +1,6 @@
 package providers
 
 import (
-	"strings"
 )
 
 // ThinkingFormatFor reports the wire dialect a provider expects for
@@ -36,8 +35,9 @@ func ModelStrip(provider, model string) []string {
 		return nil
 	}
 	bare := model
-	if _, after, cut := strings.CutLast(model, "/"); cut {
+	if _, after, cut := cutLast(model, "/"); cut {
 		bare = after
 	}
 	return lists[bare]
 }
+

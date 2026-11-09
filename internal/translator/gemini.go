@@ -516,7 +516,7 @@ func moveFunctionResponsesLast(parts []GeminiPart) []GeminiPart {
 
 func extractThoughtSig(id string) string {
 	const sep = "__ts__"
-	if _, after, ok := strings.CutLast(id, sep); ok && after != "" {
+	if _, after, ok := cutLast(id, sep); ok && after != "" {
 		return after
 	}
 	return ""
@@ -1189,3 +1189,4 @@ func isGeminiPartEmpty(p GeminiPart) bool {
 		p.InlineData == nil &&
 		p.FileData == nil
 }
+

@@ -324,6 +324,8 @@ func SetupDashboardRoutes(r chi.Router, repo *db.Repo, chatH *chat.ChatHandler) 
 	// in dashboard.RegisterRoutes because that table is mounted by tests only.
 	r.Get("/api/proxy-pools/harvest", dashH.HandleHarvestProxyPools)
 	r.Post("/api/proxy-pools/harvest", dashH.HandleHarvestProxyPools)
+	r.Get("/api/proxy-pools/auto-scan", dashH.HandleAutoScanProxyPools)
+	r.Post("/api/proxy-pools/auto-scan", dashH.HandleAutoScanProxyPools)
 	r.Delete("/api/proxy-pools/prune-dead", dashH.HandlePruneDeadProxyPools)
 	r.Put("/api/proxy-pools/{id}", dashH.HandleUpdateProxyPool)
 	r.Delete("/api/proxy-pools/{id}", dashH.HandleDeleteProxyPool)

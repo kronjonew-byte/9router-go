@@ -917,7 +917,7 @@ func (h *ChatHandler) declaredTokenLimitsFor(provider, modelID string) (contextW
 		return 0, 0
 	}
 	bare := modelID
-	if _, after, ok := strings.CutLast(modelID, "/"); ok {
+	if _, after, ok := cutLast(modelID, "/"); ok {
 		bare = after
 	}
 	customs := h.customModelsByProvider()
@@ -1367,3 +1367,11 @@ func (h *ChatHandler) BuildModelsListResult(ctx context.Context, mode ModelsList
 // ListModeCatalog is the mode that forces the full static catalog dump plus
 // custom models, regardless of how many connections are configured.
 const ListModeCatalog = modeListCatalog
+
+func cutLast(s, sep string) (string, string, bool) {
+	i := strings.LastIndex(s, sep)
+	if i < 0 {
+		return s, "", false
+	}
+	return s[:i], s[i+len(sep):], true
+}

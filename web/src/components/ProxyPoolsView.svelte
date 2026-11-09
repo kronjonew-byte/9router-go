@@ -103,6 +103,17 @@
     lastTested?: number
   } | null>(null)
 
+  let autoScanActive = $state(false)
+  let autoScanInterval = $state(30)
+  let autoScanStatus = $state<{
+    running?: boolean
+    intervalMinutes?: number
+    lastRunAt?: string
+    lastScanned?: number
+    lastPruned?: number
+    lastMessage?: string
+  } | null>(null)
+
   // Tested pools float to the top (most recently tested first);
   // never-tested pools keep backend order below.
   // Array.prototype.sort is stable, so ties preserve fetch order.
@@ -196,11 +207,80 @@
     }
   }
 
+  async function fetchAutoScanStatus() {
+    try {
+      const res = await fetch('/api/proxy-pools/auto-scan', {
+        headers: getAuthHeaders()
+      })
+      if (res.ok) {
+        const data = await res.json()
+        autoScanStatus = data
+        autoScanActive = data.running === true
+        if (typeof data.intervalMinutes === 'number' && data.intervalMinutes > 0) {
+          autoScanInterval = data.intervalMinutes
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  async function handleToggleAutoScan() {
+    try {
+      importing = true
+      if (autoScanActive) {
+        const res = await fetch('/api/proxy-pools/auto-scan', {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ action: 'stop' })
+        })
+        const data = await res.json()
+        if (data.success) {
+          notifications.success(data.message || 'Auto-scanner stopped')
+          autoScanActive = false
+          await fetchAutoScanStatus()
+        } else {
+          notifications.error(data.error || 'Failed to stop auto-scanner')
+        }
+      } else {
+        const res = await fetch('/api/proxy-pools/auto-scan', {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            action: 'start',
+            interval: Number(autoScanInterval) || 30
+          })
+        })
+        const data = await res.json()
+        if (data.success) {
+          notifications.success(data.message || 'Auto-scanner started')
+          autoScanActive = true
+          await fetchAutoScanStatus()
+          await fetchProxyPools()
+        } else {
+          notifications.error(data.error || 'Failed to start auto-scanner')
+        }
+      }
+    } catch (e: any) {
+      notifications.error(e?.message || 'Failed to toggle auto-scanner')
+    } finally {
+      importing = false
+    }
+  }
+
   onMount(() => {
     fetchProxyPools()
     fetchHarvestStatus()
+    fetchAutoScanStatus()
     const timer = setInterval(() => {
       fetchHarvestStatus()
+      fetchAutoScanStatus()
       if (harvesting) {
         fetchProxyPools()
       }
@@ -952,38 +1032,6 @@
 
           <MenuItem label="Add Proxy Pool" icon="add" onSelect={() => openCreateModal('single')} />
           <MenuItem label="Batch Import" icon="upload" onSelect={() => openCreateModal('bulk')} />
-          <div class="my-1 border-t border-border-subtle" role="separator"></div>
-          <MenuItem
-            label={harvesting ? 'Stop Harvester' : 'Harvest Live Proxies'}
-            icon={harvesting ? 'stop_circle' : 'wifi_find'}
-            onSelect={handleToggleHarvest}
-          />
-          <MenuItem label="Prune Dead Pools" icon="cleaning_services" onSelect={() => {
-            confirmState = {
-              title: 'Prune Dead Proxy Pools',
-              message: 'Remove all inactive or failing proxy pools?',
-              confirmText: 'Prune',
-              onConfirm: async () => {
-                try {
-                  const res = await fetch('/api/proxy-pools/prune-dead', {
-                    method: 'DELETE',
-                    headers: getAuthHeaders()
-                  });
-                  const data = await res.json();
-                  if (data.success) {
-                    notifications.success(data.message);
-                    await fetchProxyPools();
-                  } else {
-                    notifications.error(data.error || 'Failed to prune dead proxies');
-                  }
-                } catch (e: any) {
-                  notifications.error(e?.message || 'Failed to prune dead proxies');
-                } finally {
-                  confirmState = null;
-                }
-              }
-            };
-          }} />
         </Menu>
       </div>
     </div>
@@ -1053,6 +1101,67 @@
               {harvesting ? 'stop_circle' : 'play_arrow'}
             </span>
             {harvesting ? 'Stop' : 'Harvest'}
+          </Button>
+        </div>
+      </div>
+
+      <!-- Auto-Scan Engine Row (tempat auto prune bawah auto harvest) -->
+      <div class="mb-4 flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-2/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-violet-500/30 bg-violet-500/10 text-violet-500">
+            <span class="material-symbols-outlined text-[19px]">health_and_safety</span>
+          </div>
+          <div class="min-w-0 flex flex-col">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold text-text-main tracking-tight">Auto Prune</span>
+              <span class={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-mono font-medium ${autoScanActive ? 'bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 border border-emerald-500/30' : 'bg-surface-3 text-text-muted'}`}>
+                <span class={`size-1.5 rounded-full shrink-0 ${autoScanActive ? 'bg-emerald-500 animate-pulse' : 'bg-text-subtle'}`}></span>
+                {autoScanActive ? 'ACTIVE' : 'IDLE'}
+              </span>
+            </div>
+            <span class="text-[11px] text-text-muted truncate">
+              {autoScanStatus?.lastMessage || 'Tests proxy pool health periodically and auto-deletes dead (unbound) proxies'}
+            </span>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 shrink-0 pt-2 sm:pt-0 border-t border-border-subtle/50 sm:border-t-0">
+          <div class="flex items-center gap-1.5 rounded-lg border border-border-subtle bg-surface px-2.5 py-1 text-xs">
+            <label for="autoscan-interval-select" class="text-text-muted font-mono text-xs whitespace-nowrap">Interval:</label>
+            <select
+              id="autoscan-interval-select"
+              bind:value={autoScanInterval}
+              disabled={autoScanActive || importing}
+              class="rounded border border-border-subtle bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-text-main focus:border-primary focus:outline-none cursor-pointer"
+              title="How often to scan proxy pool health"
+            >
+              <option value={10}>Every 10m</option>
+              <option value={30}>Every 30m</option>
+              <option value={60}>Every 1h</option>
+              <option value={120}>Every 2h</option>
+              <option value={360}>Every 6h</option>
+              <option value={720}>Every 12h</option>
+            </select>
+          </div>
+
+          <div class="flex items-center gap-1.5 rounded-lg border border-border-subtle bg-surface px-2.5 py-1 text-xs font-mono text-text-muted">
+            <span class="material-symbols-outlined text-[13px]">monitor_heart</span>
+            <span>Scan {autoScanStatus?.lastScanned ?? 0}</span>
+            <span class="text-border-subtle mx-0.5">/</span>
+            <span>Prune {autoScanStatus?.lastPruned ?? 0}</span>
+          </div>
+
+          <Button
+            size="sm"
+            variant={autoScanActive ? 'danger' : 'primary'}
+            onclick={handleToggleAutoScan}
+            disabled={importing}
+            title={autoScanActive ? 'Stop background auto-scanner' : 'Start background auto-scan'}
+          >
+            <span class="material-symbols-outlined text-[16px]">
+              {autoScanActive ? 'stop_circle' : 'play_arrow'}
+            </span>
+            {autoScanActive ? 'Stop' : 'Auto-Scan'}
           </Button>
         </div>
       </div>

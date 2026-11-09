@@ -1146,7 +1146,7 @@ var ProviderRegistry = map[string]ProviderMeta{
 		Color:        "#DC2626",
 		Icon:         "code",
 		Priority:     130,
-		ServiceKinds: []string{"llm"},
+		ServiceKinds: []string{"llm", "tts"},
 		Website:      "https://open.bigmodel.cn",
 		Notice:       &Notice{APIKeyURL: "https://open.bigmodel.cn/usercenter/apikeys"},
 	},

@@ -512,7 +512,7 @@ func parseMiMoModelVoice(model string) (modelID, voiceID string) {
 	case strings.HasPrefix(model, mimoDefaultModel+"/"):
 		return mimoDefaultModel, strings.TrimPrefix(model, mimoDefaultModel+"/")
 	}
-	if before, after, ok := strings.CutLast(model, "/"); ok && before != "" {
+	if before, after, ok := cutLast(model, "/"); ok && before != "" {
 		return before, after
 	}
 	return mimoDefaultModel, mimoDefaultVoice
@@ -1525,4 +1525,12 @@ func buildSystemoneURL(override, cfgURL, cfgPath string) string {
 		return base + path[len(prefix):]
 	}
 	return base + path
+}
+
+func cutLast(s, sep string) (string, string, bool) {
+	i := strings.LastIndex(s, sep)
+	if i < 0 {
+		return s, "", false
+	}
+	return s[:i], s[i+len(sep):], true
 }
